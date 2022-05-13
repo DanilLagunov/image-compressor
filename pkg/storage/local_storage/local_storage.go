@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"os"
 	"strings"
+	"sync"
 
 	guuid "github.com/google/uuid"
 )
@@ -52,9 +53,13 @@ func (s LocalStorage) SaveImage(file multipart.File, header *multipart.FileHeade
 
 	errs := make(chan error, 4)
 
+	wg := sync.WaitGroup{}
+
 	for _, q := range []int{100, 75, 50, 25} {
+		wg.Add(1)
 		go func(image image.Image, quality int, id string) {
 			file, err := os.Create(s.path + id + "/" + fmt.Sprint(quality) + ".jpg")
+			defer wg.Done()
 			defer file.Close()
 			if err != nil {
 				errs <- err
@@ -69,6 +74,7 @@ func (s LocalStorage) SaveImage(file multipart.File, header *multipart.FileHeade
 			errs <- nil
 		}(img, q, id)
 	}
+	wg.Wait()
 	for i := 0; i < 4; i++ {
 		err := <-errs
 		if err != nil {
